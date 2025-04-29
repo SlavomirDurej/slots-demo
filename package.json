@@ -1,0 +1,27 @@
+{
+  "name": "slots-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@pixi/sound": "^6.0.1",
+    "pixi.js": "^8.9.2",
+    "tailwindcss": "^4.1.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.3"
+  }
+}

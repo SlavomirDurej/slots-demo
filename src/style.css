@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles or component styles can go here if needed */
+body {
+  /* You can override Tailwind base styles or add new ones here */
+  font-family: sans-serif; /* Example: Set a default font */
+} 
