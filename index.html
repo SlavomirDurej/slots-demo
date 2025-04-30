@@ -3,25 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Disney Princess Slots</title>
-    <link rel="stylesheet" href="./src/style.css"> <!-- Link to Tailwind CSS -->
+    <title>Slots Demo</title>
+    <link rel="stylesheet" href="./src/style.css">
     <style>
-        /* Basic styling to center canvas and remove margin */
-        body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #222; }
-        canvas { border: 1px solid black; background-color: white; }
-        /* Hide overlay initially */
-        #settings-overlay { display: none; }
+        html, body {
+            height: 100%; margin: 0; padding: 0; overflow: hidden;
+            /* Set background image on body */
+            background-image: url('assets/images/bg.jpg');
+            background-size: cover; /* Cover the entire area */
+            background-position: center; /* Center the image */
+            background-repeat: no-repeat;
+            font-family: sans-serif; /* Base font */
+        }
+        #root {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            /* Ensure root doesn't obscure body background */
+            background-color: transparent;
+        }
+        #canvas-container {
+            flex-grow: 1;
+            position: relative;
+            /* Make container transparent */
+            background-color: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+            /* Optional: Add a subtle shadow or border if needed for contrast */
+            /* box-shadow: 0 0 10px rgba(0,0,0,0.5); */
+        }
+        #bottom-bar {
+            height: 80px;
+            background-color: rgba(0, 0, 0, 0.8); /* Semi-transparent black */
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 40px;
+            flex-shrink: 0;
+            font-size: 18px;
+            font-weight: bold;
+            /* Add some top border for separation */
+            border-top: 1px solid #444;
+        }
+        #settings-overlay { display: none; } /* Keep as is */
+        .ui-text {
+             min-width: 150px; /* Give text elements some minimum width */
+             text-align: left;
+        }
+        .ui-text span {
+            color: #FFD700;
+            margin-left: 8px; /* Slightly more space */
+        }
     </style>
 </head>
 <body>
-    <!-- Canvas for PixiJS rendering -->
-    <canvas id="pixi-canvas"></canvas>
+    <div id="root">
+        <!-- Container for the PixiJS Canvas -->
+        <div id="canvas-container">
+            <canvas id="pixi-canvas"></canvas>
+        </div>
 
-    <!-- HTML Overlay for Settings (Styled with Tailwind) -->
-    <div id="settings-overlay" class="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center">
+        <!-- Bottom UI Bar -->
+        <div id="bottom-bar">
+            <div class="ui-text">BALANCE: <span id="balance-value">1000.00</span></div>
+            <div class="ui-text">BET: <span id="bet-value">0.00</span></div>
+            <div class="ui-text">WIN: <span id="win-value">0.00</span></div>
+        </div>
+    </div>
+
+    <!-- HTML Overlay for Settings (keep as is) -->
+    <div id="settings-overlay" class="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-white p-8 rounded-lg shadow-lg text-black w-1/3 min-w-[300px]">
             <h2 class="text-2xl font-bold mb-4">Bet Settings</h2>
-            <!-- Settings content will go here -->
             <p>Coin Size: <button class="bg-gray-300 px-2 rounded">-</button> <span id="coin-size-value">0.05</span> <button class="bg-gray-300 px-2 rounded">+</button></p>
             <p>Coins/Line: <button class="bg-gray-300 px-2 rounded">-</button> <span id="coins-line-value">4</span> <button class="bg-gray-300 px-2 rounded">+</button></p>
             <p>Lines: <button class="bg-gray-300 px-2 rounded">-</button> <span id="lines-value">25</span> <button class="bg-gray-300 px-2 rounded">+</button></p>
@@ -29,7 +91,7 @@
         </div>
     </div>
 
-    <!-- Link to bundled TypeScript code -->
+    <!-- Script -->
     <script type="module" src="/src/main.ts"></script>
 </body>
 </html> 
