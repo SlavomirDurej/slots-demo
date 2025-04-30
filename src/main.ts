@@ -45,6 +45,10 @@ const REEL_WIDTH = 200; const SYMBOL_SIZE = 180; const NUM_REELS = 5; const NUM_
 const SYMBOLS_PER_REEL = 20; const SPIN_SPEED_BASE = 25; const SPIN_START_DELAY = 100;
 const SPIN_STOP_DELAY = 200; const SPIN_DURATION = 1500; const REEL_STOP_DURATION = 500; // Duration for smooth stop
 
+// --- Win Animation --- 
+const WIN_MESSAGE_DURATION = 400; // ms for the scale tween (Faster: 0.4s)
+const WIN_MESSAGE_OVERSHOOT = 1.70158; // Constant for easeInBack/easeOutBack
+
 // --- Paylines and Payouts ---
 const PAYLINES: number[][][] = [
     [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]], // Top Row
@@ -92,7 +96,8 @@ const assetManifest: AssetsManifest = {
                 "symbolCinderella": "assets/images/cinderella.png", "symbolRapunzel": "assets/images/rapunzell.png",
                 "symbolCastle": "assets/images/castle.png", "symbolCrown": "assets/images/crown.png",
                 "symbolLamp": "assets/images/lamp.png", "symbolSlipper": "assets/images/slipper.png",
-                "spinButton": "assets/images/spin-btn.png" // Make sure this exists
+                "spinButton": "assets/images/spin-btn.png", // Make sure this exists
+                "youwon": "assets/images/youwon.png" // Add the win image
             } } ]
 };
 type AudioKey = "bgm" | "spinSfx" | "stopSfx" | "winSfx" | "buttonClickSfx";
@@ -116,35 +121,122 @@ async function loadSounds(): Promise<Record<AudioKey, Sound>> {
     } return sounds;
 }
 
+// --- Easing Function ---
+// Removed easeInBack
+/*
+function easeInBack(t: number): number {
+    const c1 = WIN_MESSAGE_OVERSHOOT;
+    const c3 = c1 + 1;
+    return c3 * t * t * t - c1 * t * t;
+}
+*/
+
+// Reinstate easeOutBack
+function easeOutBack(t: number): number {
+    const c1 = WIN_MESSAGE_OVERSHOOT;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
 // --- Main Game Function ---
 async function main() {
     // --- App Setup ---
     const canvasElement = document.getElementById('pixi-canvas') as HTMLCanvasElement;
     if (!canvasElement) { console.error("Canvas element not found!"); return; }
     const app = new PIXI.Application();
-    await app.init({ width: 1280, height: 720, backgroundColor: 0x000000, backgroundAlpha: 0, resolution: window.devicePixelRatio || 1, autoDensity: true, antialias: true, canvas: canvasElement });
+    // Use logical dimensions for design, renderer will resize
+    const designWidth = 1280;
+    const designHeight = 720;
+    await app.init({
+        // width: 1280, height: 720, // Remove fixed size
+        backgroundColor: 0x000000,
+        backgroundAlpha: 0,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+        antialias: true,
+        canvas: canvasElement,
+        resizeTo: window // Automatically resize renderer to window
+    });
+
+    // --- Resize Handler ---
+    const resizeHandler = () => {
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+
+        // Calculate scale factor, maintaining aspect ratio (letterboxing/pillarboxing)
+        const scaleX = screenWidth / designWidth;
+        const scaleY = screenHeight / designHeight;
+        const scale = Math.min(scaleX, scaleY);
+
+        // Calculate the new dimensions of the stage
+        const stageWidth = designWidth * scale;
+        const stageHeight = designHeight * scale;
+
+        // Set the scale and position of the stage to center it
+        app.stage.scale.set(scale);
+        app.stage.x = (screenWidth - stageWidth) / 2;
+        app.stage.y = (screenHeight - stageHeight) / 2;
+
+        // Renderer automatically resizes due to 'resizeTo: window',
+        // but you might need this if not using resizeTo
+        // app.renderer.resize(screenWidth, screenHeight);
+    };
 
     // --- Loading ---
-    const loadingText = new PIXI.Text({ text: 'Loading...', style: { fill: 'white', fontSize: 24 } }); loadingText.anchor.set(0.5); loadingText.position.set(app.screen.width/2, app.screen.height/2); app.stage.addChild(loadingText);
+    const loadingText = new PIXI.Text({ text: 'Loading...', style: { fill: 'white', fontSize: 24 } });
+    loadingText.anchor.set(0.5);
+    // Position loading text relative to design center, will be scaled/positioned by resize handler
+    loadingText.position.set(designWidth / 2, designHeight / 2);
+    app.stage.addChild(loadingText);
+
+    // Initial resize call to set up layout
+    resizeHandler();
+    window.addEventListener('resize', resizeHandler); // Add resize listener
+
     const [assets, sounds] = await Promise.all([loadAssets(), loadSounds()]);
     app.stage.removeChild(loadingText);
 
-    // --- Game Initialization (Order: Reels Container, Frame, Spin Button) ---
+    // --- Game Initialization (Position relative to DESIGN dimensions) ---
     const frameSprite = new PIXI.Sprite(assets.slotFrame);
-    frameSprite.anchor.set(0.5); frameSprite.position.set(app.screen.width / 2, app.screen.height / 2); frameSprite.scale.set(0.95);
+    frameSprite.anchor.set(0.5);
+    // Position relative to the DESIGN center
+    frameSprite.position.set(designWidth / 2, designHeight / 2);
+    frameSprite.scale.set(0.95); // Keep original asset scaling if needed
 
-    const reelsContainer = new PIXI.Container(); const gridWidth = NUM_REELS * REEL_WIDTH; const gridHeight = NUM_ROWS * SYMBOL_SIZE;
-    reelsContainer.x = frameSprite.x - gridWidth / 2; reelsContainer.y = frameSprite.y + 8 - gridHeight / 2; // Adjust Y offset if needed
+    const reelsContainer = new PIXI.Container();
+    const gridWidth = NUM_REELS * REEL_WIDTH;
+    const gridHeight = NUM_ROWS * SYMBOL_SIZE;
+    // Position relative to the scaled FRAME position
+    reelsContainer.x = frameSprite.x - gridWidth / 2;
+    reelsContainer.y = frameSprite.y + 8 - gridHeight / 2; // Adjust Y offset if needed
     app.stage.addChild(reelsContainer); // Add reels container first
-    const reelsMask = new PIXI.Graphics().rect(reelsContainer.x, reelsContainer.y, gridWidth, gridHeight).fill(0xffffff); reelsContainer.mask = reelsMask;
+    // Mask needs to be relative to the reelsContainer's *parent* (the stage)
+    // We'll create it but update its position/size in the resize handler or position it within the stage
+    // For simplicity now, let's position it relative to the stage origin (0,0) initially
+    // and rely on the stage transform to place it correctly.
+    // The MASK coordinates are in the PARENT's coordinate system (the stage)
+    // BEFORE the stage scaling/translation. So we use design coordinates.
+    const reelsMask = new PIXI.Graphics()
+        .rect(reelsContainer.x, reelsContainer.y, gridWidth, gridHeight)
+        .fill(0xffffff);
+    reelsContainer.mask = reelsMask;
+    // IMPORTANT: Add the mask to the stage IF the mask should scale/move with the stage.
+    // If the mask should stay fixed relative to the container, this setup is okay,
+    // but it's often easier if the mask is also part of the stage hierarchy.
+    // Let's add it to the stage for consistency with scaling.
+    app.stage.addChild(reelsMask);
+
 
     app.stage.addChild(frameSprite); // Add frame on top of reels
 
     const spinButton = new PIXI.Sprite(assets.spinButton);
     spinButton.anchor.set(0.5);
+    // Position relative to the scaled FRAME position
     spinButton.x = frameSprite.x + frameSprite.width * 0.48; // Position relative to frame
     spinButton.y = frameSprite.y + frameSprite.height * 0.28;
-    spinButton.scale.set(0.55); spinButton.eventMode = 'static'; spinButton.cursor = 'pointer';
+    spinButton.scale.set(0.55); // Keep original asset scaling
+    spinButton.eventMode = 'static';
+    spinButton.cursor = 'pointer';
     app.stage.addChild(spinButton); // Add spin button last
 
     // --- Reel Setup ---
@@ -176,15 +268,59 @@ async function main() {
 
     // --- Game State ---
     let isMachineSpinning = false; let currentWin = 0; let activeWinSprites: (PIXI.Sprite | PIXI.Graphics)[] = [];
-    const currentBet: BetConfig = { coinSize: 0.05, coinsPerLine: 4, lines: MAX_LINES, };
+    // Initial balance
+    let currentBalance = 1000;
+    const currentBet: BetConfig = {
+        coinSize: 0.50,       // Set coin size to 0.50
+        coinsPerLine: 10,      // Set coins per line to 10
+        lines: MAX_LINES,       // Use max lines (20)
+    };
+    // Initial Bet = 0.50 * 10 * 20 = 100
     let spinCount = 0; // Counter for predetermined wins
+
+    // --- Win Message Elements & State ---
+    // Remove old text styles and text objects
+    /*
+    const winMessageStyle = new PIXI.TextStyle({ ... });
+    const winAmountStyle = winMessageStyle.clone();
+    winAmountStyle.fontSize = 70;
+    winAmountStyle.stroke = { color: '#4a148c', width: 6 };
+
+    const winMessageText = new PIXI.Text({ text: "YOU WON!", style: winMessageStyle });
+    winMessageText.anchor.set(0.5);
+    winMessageText.position.set(designWidth / 2, designHeight / 2 - 50);
+    winMessageText.scale.set(0);
+    winMessageText.visible = false;
+    app.stage.addChild(winMessageText);
+
+    const winAmountText = new PIXI.Text({ text: "", style: winAmountStyle });
+    winAmountText.anchor.set(0.5);
+    winAmountText.position.set(designWidth / 2, designHeight / 2 + 50);
+    winAmountText.scale.set(0);
+    winAmountText.visible = false;
+    app.stage.addChild(winAmountText);
+    */
+
+    // Create Win Image Sprite
+    const winImageSprite = new PIXI.Sprite(assets.youwon);
+    winImageSprite.anchor.set(0.5);
+    winImageSprite.position.set(designWidth / 2, designHeight / 2); // Center it
+    winImageSprite.scale.set(0); // Start scaled down
+    winImageSprite.visible = false; // Start hidden
+    app.stage.addChild(winImageSprite); // Add to stage
+
+    // Renamed animation state variables
+    let isWinImageAnimating = false;
+    let winImageAnimElapsed = 0;
+    const winImageAnimStartScale = 0;
+    const winImageAnimTargetScale = 0.8; // Adjusted target scale for the image
 
     // --- Helper Functions ---
     function calculateTotalBet(): number { return currentBet.lines * currentBet.coinsPerLine * currentBet.coinSize; }
     function updateTotalBetDisplay() {
         if (betValueSpan) betValueSpan.textContent = calculateTotalBet().toFixed(2);
         if (winValueSpan) winValueSpan.textContent = currentWin.toFixed(2);
-        // if (balanceValueSpan) balanceValueSpan.textContent = currentBalance.toFixed(2); // Update if balance changes
+        if (balanceValueSpan) balanceValueSpan.textContent = currentBalance.toFixed(2); // Update balance display
     }
     function playSound(soundKey: AudioKey) { const sound = sounds[soundKey]; if (sound) sound.play(); else console.warn(`Sound not found: ${soundKey}`); }
 
@@ -202,6 +338,34 @@ async function main() {
                 } else { console.warn(`Could not find sprite for win anim: reel ${pos.reel}, symbol ${pos.symbolIndex}`); }
             });
         }); setTimeout(clearWinAnimation, 2000);
+    }
+
+    // --- Big Win Message Tween ---
+    // Removed old showWinMessage function
+    /*
+    function showWinMessage(amount: number) { ... }
+    */
+    // Removed old hideWinMessage function
+    /*
+    function hideWinMessage() { ... }
+    */
+
+    // New functions for the image animation
+    function showWinImage() {
+        if (!winImageSprite) return;
+        console.log("Showing win image.");
+        winImageSprite.visible = true;
+        winImageSprite.scale.set(winImageAnimStartScale); // Reset scale
+        isWinImageAnimating = true;
+        winImageAnimElapsed = 0; // Reset animation time
+    }
+
+    function hideWinImage() {
+        if (!winImageSprite) return;
+        isWinImageAnimating = false; // Stop animation if running
+        winImageSprite.visible = false;
+        winImageSprite.scale.set(winImageAnimStartScale); // Reset scale for next time
+        console.log("Hiding win image.");
     }
 
     // --- Win Detection Logic (Using final target indices) ---
@@ -261,10 +425,17 @@ async function main() {
             }
         });
 
+        // Add the total win to the balance
         currentWin = totalWin;
-        updateTotalBetDisplay(); // Update HTML text
+        currentBalance += currentWin;
+        updateTotalBetDisplay(); // Update HTML text including balance
 
-        if (winners.length > 0) { console.log("Total Win:", totalWin.toFixed(2)); playWinAnimation(winners); }
+        if (winners.length > 0) {
+            console.log("Total Win:", totalWin.toFixed(2));
+            playWinAnimation(winners); // Show symbol highlights
+            // showWinMessage(totalWin);  // Remove call to old text function
+            showWinImage(); // Show the win image instead
+        }
         else { console.log("No wins detected."); }
 
         // Re-enable PixiJS spin button AFTER checks and potential animation start
@@ -320,9 +491,24 @@ async function main() {
 
     async function startSpin() {
         if (isMachineSpinning) { console.log("Machine already spinning."); return; }
+
+        // --- Balance Check & Bet Subtraction ---
+        const totalBet = calculateTotalBet();
+        if (currentBalance < totalBet) {
+            console.warn("Insufficient balance to spin.");
+            // TODO: Optionally display a message to the user here (e.g., using a simple text overlay)
+            return; // Stop the spin if not enough balance
+        }
+        currentBalance -= totalBet; // Subtract the bet FIRST
+        currentWin = 0;           // Reset win amount for the new spin
+        updateTotalBetDisplay(); // Update UI immediately to show new balance and reset win
+        // -------------------------------------
+
         isMachineSpinning = true; console.log("Starting machine spin...");
         spinButton.eventMode = 'none'; spinButton.alpha = 0.6; // Disable PixiJS spin button
-        clearWinAnimation(); if (winValueSpan) winValueSpan.textContent = "0.00"; currentWin = 0; // Reset win display
+        clearWinAnimation(); // Clear previous symbol highlights
+        // hideWinMessage();    // Remove call to old text function
+        hideWinImage(); // Hide the win image instead
 
         // Determine results *before* visual spin
         const finalTargetStripIndices = determineFinalSymbols();
@@ -419,6 +605,23 @@ async function main() {
     app.ticker.add((ticker: PIXI.Ticker) => {
         const deltaMs = ticker.deltaMS;
         let allReelsIdle = true; // Assume all stopped/idle
+
+        // --- Win Message Animation (Updated for Image) ---
+        if (isWinImageAnimating) {
+            winImageAnimElapsed += deltaMs;
+            let progress = Math.min(1, winImageAnimElapsed / WIN_MESSAGE_DURATION); // Uses updated duration
+            // Use easeOutBack for scaling again
+            let scale = winImageAnimStartScale + (winImageAnimTargetScale - winImageAnimStartScale) * easeOutBack(progress);
+
+            // Apply scale to the image sprite
+            winImageSprite.scale.set(scale);
+
+            if (progress >= 1) {
+                isWinImageAnimating = false; // Animation finished
+                console.log("Win image animation complete.");
+                // Image stays visible until next spin.
+            }
+        }
 
         reels.forEach(reel => {
             // --- Free Spinning ---
